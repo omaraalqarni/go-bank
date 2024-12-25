@@ -12,6 +12,7 @@ type Storage interface {
 	GetAccountById(int) (*Account, error)
 	GetAllAccounts() ([]*Account, error)
 	DeleteAccountById(int) error
+	LoginUser(LoginRequest) (*Account, error)
 }
 
 type PostgresStore struct {
@@ -27,8 +28,10 @@ func (p *PostgresStore) CreateAccountTable() error {
 		id serial primary key,
 		first_name varchar(255),
 		last_name varchar(255),
+    	email varchar(255),
+    	password varchar(255),
 		balance bigint,
-    	iban varchar(255),
+    	account_number varchar(255),
 		created_at timestamp
     );`
 
@@ -59,14 +62,29 @@ func NewPostgresStore() (*PostgresStore, error) {
 }
 
 func (p PostgresStore) CreateAccount(account *Account) error {
-	query := `INSERT INTO account (first_name, last_name, balance, iban, created_at) 
-			  VALUES ($1, $2, $3, $4, $5) `
+	query := `INSERT INTO account (first_name, last_name, email, password, balance, account_number, created_at) 
+			  VALUES ($1, $2, $3, $4, $5, $6, $7) `
 
-	_, err := p.db.Query(query, account.FirstName, account.LastName, account.Balance, account.IBAN, account.CreatedAt)
+	_, err := p.db.Query(query, account.FirstName, account.LastName, account.Email, account.Password, account.Balance, account.AccountNumber, account.CreatedAt)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (p *PostgresStore) LoginUser(loginReq LoginRequest) (*Account, error) {
+	row, err := p.db.Query("SELECT * WHERE email == $1;", loginReq.Email)
+	if err != nil {
+		return nil, err
+	}
+	account, err := scanIntoAccount(row)
+	if err != nil {
+		return nil, err
+	}
+	if !CheckPasswordHash(loginReq.Password, account.Password) {
+		return nil, err
+	}
+	return nil, nil
 }
 
 func (p *PostgresStore) UpdateAccount(account *Account) (*Account, error) {
@@ -115,8 +133,9 @@ func scanIntoAccount(rows *sql.Rows) (*Account, error) {
 		&account.ID,
 		&account.FirstName,
 		&account.LastName,
+		&account.Email,
 		&account.Balance,
-		&account.IBAN,
+		&account.AccountNumber,
 		&account.CreatedAt,
 	)
 	return account, err

@@ -9,12 +9,6 @@ import (
 	"strconv"
 )
 
-func WriteJSON(w http.ResponseWriter, status int, v any) error {
-	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(status)
-	return json.NewEncoder(w).Encode(v)
-}
-
 type APIServer struct {
 	listenAddr string
 	store      Storage
@@ -46,12 +40,23 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleAccountById))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
-
+	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
 	log.Printf("starting the server on port %s ...\n", s.listenAddr)
 	err := http.ListenAndServe(s.listenAddr, router)
 	if err != nil {
 		log.Fatal("server couldn't start")
 	}
+}
+
+func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+	if r.Method != "POST" {
+		return fmt.Errorf("error in login")
+	}
+	loginReq := new(LoginRequest)
+	if err := json.NewDecoder(r.Body).Decode(loginReq); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, loginReq)
 }
 
 func (s *APIServer) handleAccountById(w http.ResponseWriter, r *http.Request) error {
@@ -98,11 +103,13 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	if err := json.NewDecoder(r.Body).Decode(createAccountReq); err != nil {
 		return err
 	}
-	account := NewAccount(createAccountReq.FirstName, createAccountReq.LastName)
+	account, err := NewAccount(createAccountReq.FirstName, createAccountReq.LastName, createAccountReq.Email, createAccountReq.Password)
+	if err != nil {
+		return err
+	}
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
 	}
-	print(account.ID)
 	return WriteJSON(w, http.StatusOK, account)
 }
 

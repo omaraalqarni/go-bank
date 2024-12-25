@@ -6,6 +6,7 @@ func main() {
 
 	store, _ := NewPostgresStore()
 	err := store.Init()
+	//err := store.DropTablesCascade()
 	if err != nil {
 		log.Fatal(err)
 	}
